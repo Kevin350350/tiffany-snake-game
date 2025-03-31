@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>貪食蛇遊戲 - Tiffany 藍風格</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        /* 定義 Tiffany 藍 */
+        :root {
+            --tiffany-blue: #0ABAB5;
+            --light-gray: #f8f8f8;
+            --dark-gray: #333333;
+            --food-color: #FFFFFF; /* 食物顏色改為白色，更簡潔 */
+            --border-color: #e0e0e0;
+            --canvas-bg: #f0fafa; /* 畫布背景色 */
+        }
+
+        /* 使用 Inter 字體 (Tailwind 預設包含) */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--light-gray); /* 使用淺灰色背景 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            flex-direction: column; /* 讓標題和遊戲區塊垂直排列 */
+            padding: 1rem; /* 添加一些內邊距 */
+        }
+
+        /* 遊戲容器 */
+        .game-container {
+            background-color: white;
+            padding: 1.5rem; /* 增加內邊距 */
+            border-radius: 0.75rem; /* 圓角 */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 添加陰影增加質感 */
+            text-align: center;
+            max-width: 90vw; /* 限制最大寬度 */
+            position: relative; /* 添加 relative 使絕對定位的 gameOverBox 相對於它 */
+        }
+
+        /* 遊戲畫布 */
+        #gameCanvas {
+            border: 1px solid var(--border-color); /* 畫布邊框 */
+            border-radius: 0.5rem; /* 畫布也加圓角 */
+            background-color: var(--canvas-bg); /* 畫布背景用非常淺的藍綠色 */
+            display: block; /* 修正 canvas 預設的 inline 問題 */
+            margin: 0 auto; /* 水平置中 */
+            max-width: 100%; /* 讓畫布在小螢幕縮小 */
+            height: auto; /* 保持比例 */
+        }
+
+        /* 分數和標題 */
+        .score-display, .game-title {
+            color: var(--dark-gray);
+            font-weight: 600; /* 字體加粗 */
+            margin-bottom: 1rem; /* 與下方元素間距 */
+        }
+        .game-title {
+            color: var(--tiffany-blue); /* 標題使用 Tiffany 藍 */
+            font-size: 1.75rem; /* 標題字體加大 */
+        }
+
+        /* 按鈕樣式 (通用) */
+        .btn {
+            background-color: var(--tiffany-blue);
+            color: white;
+            padding: 0.6rem 1.2rem; /* 調整按鈕大小 */
+            border: none;
+            border-radius: 0.5rem; /* 按鈕圓角 */
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.3s ease, transform 0.1s ease; /* 過渡效果 */
+            margin: 0.25rem; /* 稍微調整按鈕間距 */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 按鈕陰影 */
+            min-width: 80px; /* 最小寬度 */
+            text-align: center;
+            display: inline-block; /* 確保按鈕並排 */
+        }
+
+        .btn:hover {
+            background-color: #089a94; /* 滑鼠懸停時加深顏色 */
+        }
+        .btn:active {
+             transform: scale(0.98); /* 按下時微縮 */
+        }
+
+        /* 控制按鈕和功能按鈕的容器 */
+        .controls-and-actions {
+            margin-top: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem; /* 控制區和功能按鈕的間距 */
+        }
+
+        /* 方向控制按鈕容器 */
+        .controls-container {
+            display: grid; /* 使用 grid 佈局 */
+            grid-template-columns: repeat(3, 1fr); /* 三列 */
+            grid-template-rows: repeat(2, auto); /* 兩行 */
+            gap: 0.5rem; /* 按鈕間隙 */
+            justify-items: center; /* 水平居中 */
+            align-items: center; /* 垂直居中 */
+            max-width: 200px; /* 限制控制區寬度 */
+        }
+
+        /* 方向按鈕特定樣式 */
+        .control-btn {
+            padding: 0.8rem; /* 方向按鈕用方形一點 */
+            font-size: 1.2rem; /* 加大箭頭字體 */
+            line-height: 1; /* 修正行高 */
+            min-width: 50px; /* 調整最小寬度 */
+            width: 50px; /* 固定寬度 */
+            height: 50px; /* 固定高度 */
+        }
+
+        /* Grid 佈局定位 */
+        #upButton { grid-column: 2 / 3; grid-row: 1 / 2; }
+        #leftButton { grid-column: 1 / 2; grid-row: 2 / 3; }
+        #downButton { grid-column: 2 / 3; grid-row: 2 / 3; }
+        #rightButton { grid-column: 3 / 4; grid-row: 2 / 3; }
+
+        /* 功能按鈕容器 (重新開始, 靜音) */
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem; /* 功能按鈕間距 */
+        }
+
+
+        /* 遊戲結束訊息框 */
+        #gameOverBox {
+            position: absolute; /* 相對於父容器定位 */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex; /* 使用 flex 居中 */
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.7); /* 半透明黑色背景 */
+            z-index: 10; /* 確保在最上層 */
+            opacity: 0; /* 預設透明 */
+            visibility: hidden; /* 預設隱藏 */
+            transition: opacity 0.3s ease, visibility 0.3s ease; /* 添加淡入淡出效果 */
+        }
+        #gameOverBox.visible {
+             opacity: 1;
+             visibility: visible;
+        }
+
+         #gameOverContent {
+            background-color: white;
+            color: var(--dark-gray);
+            padding: 2rem;
+            border-radius: 0.75rem;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+         }
+
+         #gameOverContent h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--tiffany-blue);
+         }
+
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 class="game-title">貪食蛇遊戲</h1>
+        <div class="score-display text-lg">分數: <span id="score">0</span></div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+        <div class="controls-and-actions">
+            
+            <div class="controls-container">
+                <button id="upButton" class="btn control-btn">↑</button>
+                <button id="leftButton" class="btn control-btn">←</button>
+                <button id="downButton" class="btn control-btn">↓</button>
+                <button id="rightButton" class="btn control-btn">→</button>
+            </div>
+
+            
+            <div class="action-buttons">
+                <button id="restartButton" class="btn">重新開始</button>
+                <button id="muteButton" class="btn">靜音</button> {/* 新增靜音按鈕 */}
+            </div>
+        </div>
+
+        
+        <div id="gameOverBox">
+            <div id="gameOverContent">
+                 <h2>遊戲結束！</h2>
+                 <p>你的最終分數是: <span id="finalScore">0</span></p>
+                 <button id="restartButtonGameOver" class="btn mt-4">再玩一次</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const restartButton = document.getElementById('restartButton');
+        const restartButtonGameOver = document.getElementById('restartButtonGameOver');
+        const gameOverBox = document.getElementById('gameOverBox');
+        const finalScoreElement = document.getElementById('finalScore');
+        const muteButton = document.getElementById('muteButton'); // 取得靜音按鈕
+
+        // 方向控制按鈕
+        const upButton = document.getElementById('upButton');
+        const downButton = document.getElementById('downButton');
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
+
+
+        // --- 遊戲設定 ---
+        const gridSize = 20; // 格子大小 (蛇和食物的大小)
+        const canvasSize = 400; // 畫布大小 (需與 canvas 標籤的 width/height 一致)
+        const tileCount = canvasSize / gridSize; // 畫布能容納的格子數
+        const tiffanyBlueColor = '#0ABAB5'; // 直接定義顏色代碼
+        const foodColor = '#FFFFFF'; // 食物顏色
+        const canvasBgColor = '#f0fafa'; // 畫布背景色
+
+        // --- 遊戲狀態變數 ---
+        let snake = []; // 蛇的身體，陣列，每個元素是 {x, y}
+        let dx = gridSize; // 水平移動速度/方向 (初始向右)
+        let dy = 0;      // 垂直移動速度/方向
+        let food = { x: 0, y: 0 }; // 食物位置
+        let score = 0;
+        let changingDirection = false; // 防止快速連續轉彎導致反向
+        let gameLoopInterval = null;
+        let gameSpeed = 150; // 遊戲速度 (毫秒)，數字越小越快
+
+        // --- 音效設定 ---
+        let audioInitialized = false; // 音訊是否已初始化 (防止重複初始化)
+        let isMuted = false;          // 是否靜音
+        let eatSoundSynth = null;     // 吃食物的合成器
+        let gameOverSynth = null;   // 遊戲結束的合成器
+        let backgroundMusic = null;   // 背景音樂序列
+
+        // --- 初始化音訊 (需要使用者互動後觸發) ---
+        async function initAudio() {
+            if (audioInitialized) return; // 如果已初始化，直接返回
+
+            await Tone.start(); // 啟動 Tone.js 音訊上下文
+            console.log("音訊已準備就緒"); // 在控制台顯示訊息
+
+            // 創建合成器
+            eatSoundSynth = new Tone.Synth({
+                oscillator: { type: 'sine' }, // 正弦波
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0.05, release: 0.2 }
+            }).toDestination();
+
+            gameOverSynth = new Tone.PolySynth(Tone.Synth, { // 使用 PolySynth 播放和弦
+                 oscillator: { type: 'square' }, // 方波
+                 envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.4 }
+            }).toDestination();
+            gameOverSynth.volume.value = -6; // 降低一點音量
+
+            // 創建背景音樂
+            const musicSynth = new Tone.Synth({
+                 oscillator: { type: 'triangle' }, // 三角波
+                 envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 1 }
+            }).toDestination();
+            musicSynth.volume.value = -12; // 背景音樂音量小一點
+
+            // 定義背景音樂的音符序列 (簡單的 C 大調琶音)
+            const notes = ["C4", "E4", "G4", "C5", "G4", "E4"];
+            let noteIndex = 0;
+            backgroundMusic = new Tone.Sequence((time, note) => {
+                musicSynth.triggerAttackRelease(note, "8n", time); // 每個音符持續八分音符
+                noteIndex = (noteIndex + 1) % notes.length;
+            }, notes, "4n"); // 每四分音符觸發一次
+
+            backgroundMusic.loop = true; // 循環播放
+            Tone.Transport.bpm.value = 100; // 設定音樂速度
+
+            audioInitialized = true; // 標記音訊已初始化
+            updateMuteButtonText(); // 更新靜音按鈕文字
+
+            // 如果不是靜音狀態，則開始播放背景音樂
+            if (!isMuted) {
+                 Tone.Transport.start();
+                 backgroundMusic.start(0);
+            }
+        }
+
+        // --- 播放吃食物音效 ---
+        function playEatSound() {
+            if (!audioInitialized || isMuted || !eatSoundSynth) return;
+            // 播放一個短促、音高稍高的音效 (G5)
+            eatSoundSynth.triggerAttackRelease("G5", "16n"); // 16分音符長度
+        }
+
+        // --- 播放遊戲結束音效 ---
+        function playGameOverSound() {
+            if (!audioInitialized || isMuted || !gameOverSynth) return;
+             // 播放一個低沉、持續稍長的下降音效 (C3, A2)
+            gameOverSynth.triggerAttackRelease(["C3", "A2"], "2n"); // 持續半音符
+        }
+
+        // --- 切換靜音狀態 ---
+        function toggleMute() {
+             // 先確保音訊已初始化 (如果還沒，點擊靜音按鈕也算一次互動)
+            if (!audioInitialized) {
+                 initAudio(); // 如果點擊靜音時音訊未初始化，則初始化它
+            }
+
+            isMuted = !isMuted;
+            updateMuteButtonText();
+
+            if (isMuted) {
+                // 靜音：停止 Transport (會停止背景音樂)
+                if (backgroundMusic && Tone.Transport.state === 'started') {
+                     Tone.Transport.pause(); // 暫停而非停止，以便恢復
+                }
+                // 可以選擇性地將所有合成器的音量設為靜音
+                // Tone.Destination.mute = true;
+            } else {
+                // 取消靜音：如果 Transport 之前是啟動的，則恢復播放
+                if (backgroundMusic && Tone.Transport.state === 'paused') {
+                     Tone.Transport.start();
+                }
+                 // Tone.Destination.mute = false;
+            }
+            console.log("靜音狀態:", isMuted);
+        }
+
+        // --- 更新靜音按鈕文字 ---
+        function updateMuteButtonText() {
+            muteButton.textContent = isMuted ? "取消靜音" : "靜音";
+        }
+
+
+        // --- 初始化 / 重新開始遊戲 ---
+        function initializeGame() {
+            // 嘗試初始化音訊 (如果尚未初始化且有使用者互動)
+            // 注意：這裡直接調用可能因為還沒有使用者互動而無法啟動 AudioContext
+            // initAudio() 會在第一次按鈕點擊或按鍵時被更可靠地觸發
+            // if (!audioInitialized) initAudio(); // 可以在這裡嘗試，但不保證成功
+
+            // 隱藏遊戲結束提示框
+            gameOverBox.classList.remove('visible');
+
+            // 初始化蛇的位置 (畫面中央附近)
+            snake = [
+                { x: gridSize * Math.floor(tileCount / 2), y: gridSize * Math.floor(tileCount / 2) },
+                { x: gridSize * (Math.floor(tileCount / 2) - 1), y: gridSize * Math.floor(tileCount / 2) },
+                { x: gridSize * (Math.floor(tileCount / 2) - 2), y: gridSize * Math.floor(tileCount / 2) }
+            ];
+            // 初始化蛇的移動方向
+            dx = gridSize;
+            dy = 0;
+            // 初始化分數
+            score = 0;
+            scoreElement.textContent = score;
+            // 產生第一個食物
+            createFood();
+            // 清除舊的遊戲循環 (如果有的話)
+            if (gameLoopInterval) {
+                clearInterval(gameLoopInterval);
+            }
+            // 開始新的遊戲循環
+            gameLoopInterval = setInterval(gameLoop, gameSpeed);
+
+             // 如果音訊已初始化且 Transport 停止了 (例如從 Game Over 重新開始)，則啟動它
+            if (audioInitialized && !isMuted && Tone.Transport.state !== 'started') {
+                Tone.Transport.start();
+                if (backgroundMusic && backgroundMusic.state !== 'started') {
+                    backgroundMusic.start(0);
+                }
+            }
+        }
+
+        // --- 遊戲主循環 ---
+        function gameLoop() {
+            if (isGameOver()) {
+                showGameOver();
+                clearInterval(gameLoopInterval);
+                return;
+            }
+            clearCanvas();
+            moveSnake();
+            drawFood();
+            drawSnake();
+        }
+
+        // --- 清除畫布 ---
+        function clearCanvas() {
+            ctx.fillStyle = canvasBgColor;
+            ctx.fillRect(0, 0, canvasSize, canvasSize);
+        }
+
+        // --- 移動蛇 ---
+        function moveSnake() {
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+            snake.unshift(head);
+
+            const didEatFood = head.x === food.x && head.y === food.y;
+            if (didEatFood) {
+                score += 10;
+                scoreElement.textContent = score;
+                playEatSound(); // 播放吃食物音效
+                createFood();
+            } else {
+                snake.pop();
+            }
+            changingDirection = false;
+        }
+
+        // --- 繪製蛇 ---
+        function drawSnake() {
+            ctx.fillStyle = tiffanyBlueColor;
+            snake.forEach(segment => {
+                drawRoundedRect(ctx, segment.x, segment.y, gridSize, gridSize, 4);
+            });
+        }
+
+        // --- 繪製圓角矩形輔助函數 ---
+        function drawRoundedRect(ctx, x, y, width, height, radius) {
+          ctx.beginPath();
+          ctx.moveTo(x + radius, y);
+          ctx.lineTo(x + width - radius, y);
+          ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+          ctx.lineTo(x + width, y + height - radius);
+          ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+          ctx.lineTo(x + radius, y + height);
+          ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+          ctx.lineTo(x, y + radius);
+          ctx.quadraticCurveTo(x, y, x + radius, y);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // --- 產生食物 ---
+        function createFood() {
+            let foodX, foodY;
+            while (true) {
+                foodX = Math.floor(Math.random() * tileCount) * gridSize;
+                foodY = Math.floor(Math.random() * tileCount) * gridSize;
+                let collision = false;
+                for (let i = 0; i < snake.length; i++) {
+                    if (snake[i].x === foodX && snake[i].y === foodY) {
+                        collision = true;
+                        break;
+                    }
+                }
+                if (!collision) break;
+            }
+            food = { x: foodX, y: foodY };
+        }
+
+        // --- 繪製食物 ---
+        function drawFood() {
+            ctx.fillStyle = foodColor;
+            ctx.strokeStyle = tiffanyBlueColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(food.x + gridSize / 2, food.y + gridSize / 2, gridSize / 2 - 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.lineWidth = 1;
+        }
+
+        // --- 設定方向 (供鍵盤和按鈕調用) ---
+        async function setDirection(newDx, newDy) {
+            // 確保音訊在第一次操作時初始化
+            if (!audioInitialized) {
+                await initAudio();
+            }
+
+            if (changingDirection) return;
+
+            const goingUp = dy === -gridSize;
+            const goingDown = dy === gridSize;
+            const goingRight = dx === gridSize;
+            const goingLeft = dx === -gridSize;
+
+            if (newDx === -dx && newDy === 0 && dx !== 0) return;
+            if (newDy === -dy && newDx === 0 && dy !== 0) return;
+
+            dx = newDx;
+            dy = newDy;
+            changingDirection = true;
+        }
+
+        // --- 處理鍵盤輸入 ---
+        function handleKeyDown(event) {
+            // 確保音訊在第一次操作時初始化 (異步)
+             if (!audioInitialized) {
+                 initAudio();
+             }
+            const keyPressed = event.key;
+
+            if (keyPressed === "ArrowLeft" || keyPressed.toLowerCase() === "a") {
+                setDirection(-gridSize, 0);
+            } else if (keyPressed === "ArrowUp" || keyPressed.toLowerCase() === "w") {
+                 setDirection(0, -gridSize);
+            } else if (keyPressed === "ArrowRight" || keyPressed.toLowerCase() === "d") {
+                 setDirection(gridSize, 0);
+            } else if (keyPressed === "ArrowDown" || keyPressed.toLowerCase() === "s") {
+                 setDirection(0, gridSize);
+            }
+        }
+
+        // --- 檢查遊戲是否結束 ---
+        function isGameOver() {
+            const head = snake[0];
+            const hitLeftWall = head.x < 0;
+            const hitRightWall = head.x >= canvasSize;
+            const hitTopWall = head.y < 0;
+            const hitBottomWall = head.y >= canvasSize;
+
+            if (hitLeftWall || hitRightWall || hitTopWall || hitBottomWall) {
+                return true;
+            }
+
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // --- 顯示遊戲結束畫面 ---
+        function showGameOver() {
+             finalScoreElement.textContent = score;
+             gameOverBox.classList.add('visible');
+             playGameOverSound(); // 播放遊戲結束音效
+             // 遊戲結束時暫停背景音樂
+             if (backgroundMusic && Tone.Transport.state === 'started') {
+                 Tone.Transport.pause();
+             }
+        }
+
+        // --- 事件監聽 ---
+        document.addEventListener('keydown', handleKeyDown); // 監聽鍵盤
+        restartButton.addEventListener('click', initializeGame);
+        restartButtonGameOver.addEventListener('click', initializeGame);
+        muteButton.addEventListener('click', toggleMute); // 監聽靜音按鈕
+
+        // 監聽螢幕按鈕點擊 (也觸發 initAudio)
+        upButton.addEventListener('click', () => setDirection(0, -gridSize));
+        downButton.addEventListener('click', () => setDirection(0, gridSize));
+        leftButton.addEventListener('click', () => setDirection(-gridSize, 0));
+        rightButton.addEventListener('click', () => setDirection(gridSize, 0));
+
+
+        // --- 遊戲開始 ---
+        initializeGame(); // 頁面載入後自動開始遊戲
+        updateMuteButtonText(); // 初始化靜音按鈕文字
+
+    </script>
+</body>
+</html>
